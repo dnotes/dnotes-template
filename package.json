@@ -1,0 +1,21 @@
+{
+  "name": "${{ vars.PROJECT_NAME }}",
+  "version": "0.0.1",
+  "description": "${{ vars.PROJECT_DESCRIPTION }}",
+  "scripts": {
+    "changeset": "changeset",
+    "changeset:release": "changeset publish",
+    "changeset:version": "changeset version",
+    "build": "pnpm -r build",
+    "test:watch": "pnpm -r test:watch",
+    "test": "pnpm -r test"
+  },
+  "keywords": "${{ vars.PROJECT_KEYWORDS }}",
+  "author": "${{ vars.PROJECT_AUTHOR }}",
+  "license": "MIT",
+  "devDependencies": {
+    "pnpm": "^9.15.9",
+    "vitest": "^3.1.4",
+    "@changesets/cli": "^2.29.3"
+  }
+}
