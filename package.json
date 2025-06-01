@@ -1,6 +1,7 @@
 {
   "name": "${{ vars.PROJECT_NAME }}",
   "version": "0.0.1",
+  "private": true,
   "description": "${{ vars.PROJECT_DESCRIPTION }}",
   "scripts": {
     "changeset": "changeset",
