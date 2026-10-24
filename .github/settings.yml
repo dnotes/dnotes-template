@@ -1,10 +1,16 @@
 repository:
-  # See https://developer.github.com/v3/repos/#edit for all available settings.
+  # See https://docs.github.com/en/rest/repos/repos#update-a-repository for all available settings.
   has_issues: true
   has_projects: false
   has_wiki: false
   has_downloads: false
   default_branch: main
+  # Squash merging only: every merge adds exactly one commit to main. Hosting
+  # services that deploy sites/* based on changed files (see "Deploying sites"
+  # in the README) rebuild everything when a push has 20+ commits.
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: false
 
 branches:
   - name: main

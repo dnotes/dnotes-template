@@ -1,0 +1,36 @@
+# Dependabot (configuration file, not a workflow)
+#
+# What it does, in plain terms:
+#   Once a week, checks for newer versions of the npm packages this project
+#   uses and of the GitHub Actions used in .github/workflows, and opens pull
+#   requests to update them. Related updates are grouped into one pull request.
+#
+# It skips versions released less than 7 days ago, which gives the community
+# time to catch malicious releases. (Separately, if Dependabot alerts are
+# turned on, GitHub opens immediate pull requests for known vulnerabilities.)
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ['*']
+
+  # Matches minimumReleaseAge in pnpm-workspace.yaml, so Dependabot
+  # never proposes a version that pnpm would refuse to install.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]

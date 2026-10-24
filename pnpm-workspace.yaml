@@ -1,3 +1,20 @@
 packages:
   - 'packages/*'
   - 'sites/*'
+
+# Only allow running `pnpm publish` by hand from main. (The release workflow
+# publishes through Changesets, which skips this check.)
+publishBranch: main
+
+# Supply-chain protections. Malicious releases are usually caught and removed
+# within days, so don't install any version younger than 7 days. Setting this
+# explicitly also makes it strict: installs fail rather than fall back.
+minimumReleaseAge: 10080
+
+# Fail if a package that was published with provenance or trusted publishing
+# suddenly ships a version without it (a common sign of a hijacked account).
+trustPolicy: no-downgrade
+
+# Dependency install scripts are blocked unless approved here
+# (strictDepBuilds is on by default). Run `pnpm approve-builds` to add entries.
+allowBuilds: {}

@@ -1,85 +1,221 @@
-name: Release
+# CI & Release
+#
+# What it does, in plain terms:
+#
+#   On every pull request:
+#     - Builds the project and runs all the tests ("test"). A pull request
+#       can't be merged into main until this passes.
+#
+#   On every change to main (a merged pull request):
+#     - Runs the tests again. Nothing below happens unless they pass.
+#     - Releases, using Changesets:
+#         * If there are unreleased change notes (files in .changeset/), it opens
+#           or updates a "release" pull request that bumps version numbers and
+#           updates the changelogs. Nothing is published yet.
+#         * When that release pull request is merged, it publishes the new
+#           package versions to npm (after you approve it, if the npm-publish
+#           environment has required reviewers).
+#
+#   When started by hand from the Actions tab ("Run workflow"):
+#     - Runs only the tests, on the branch you pick. Nothing is released.
+#
+#   Sites in sites/ are not deployed from here; see "Deploying sites" in the
+#   README.
+#
+# Security notes for maintainers:
+# - Every job starts with no permissions and asks only for what it needs.
+# - Publishing uses npm trusted publishing (OIDC), so there is no npm token.
+#   Only the "publish" job can get npm credentials, and it never runs build or
+#   dependency scripts; packages are built and packed in the "pack" job.
+#   Based on https://changesets.dev/guide/automating#trusted-publishing
+# - Actions are pinned to full commit SHAs; Dependabot keeps them updated.
+
+name: CI & Release
 
 on:
+  pull_request:
   push:
     branches:
       - main
+  # Lets you run the tests by hand from the Actions tab (used for release PRs).
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel outdated PR runs, but never interrupt a release in progress on main.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The job name "test" is a required status check in .github/settings.yml
   test:
-    if: github.repository != 'dnotes/dnotes-template'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+      - name: Check out repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          version: 9
+          node-version-file: .nvmrc
+          cache: pnpm
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20.x'
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
-      # you may REMOVE this if you are NOT using playwright for testing
-      - name: Install playwright deps
-        run: pnpm -w run playwright-install-ci
+      # Runs only if the root package.json has a "playwright-install-ci" script
+      # (e.g. "playwright install --with-deps"); otherwise does nothing.
+      - name: Install Playwright browsers
+        run: pnpm -w run --if-present playwright-install-ci
 
-      - name: Run Tests
+      - name: Run tests
         run: pnpm -w run test
 
-  release:
+  # The release jobs below don't use the dependency cache, so a poisoned cache
+  # can't affect what gets published.
+
+  # Decides what to do: "version" (open/update the release PR), "publish"
+  # (publish new versions to npm), or "none".
+  select-mode:
+    if: github.event_name == 'push'
     needs: test
-    environment: npm-publish
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-    timeout-minutes: 20
-    name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      mode: ${{ steps.select-mode.outputs.mode }}
+      publish-plan-artifact-id: ${{ steps.select-mode.outputs.publish-plan-artifact-id }}
+    permissions:
+      contents: read
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+      - name: Check out repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          version: 9
+          node-version-file: .nvmrc
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Select Changesets mode
+        id: select-mode
+        uses: changesets/action/select-mode@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+
+  # Opens or updates the release PR.
+  version:
+    if: needs.select-mode.outputs.mode == 'version'
+    needs: select-mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # commit version changes
+      pull-requests: write # open the release PR
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: '20.x'
+          persist-credentials: false
 
-      - name: Install Dependencies
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create or update release PR
+        uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          commit-message: "chore: new release"
+          pr-title: "chore: new release candidate"
+
+  # Builds the packages and packs them into tarballs for the publish job.
+  pack:
+    if: needs.select-mode.outputs.mode == 'publish'
+    needs: select-mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      pack-dir-artifact-id: ${{ steps.pack.outputs.pack-dir-artifact-id }}
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
-      - name: Create Release Pull Request or Publish to npm
-        id: changesets
-        uses: changesets/action@v1
+      - name: Pack packages
+        id: pack
+        uses: changesets/action/pack@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          publish: pnpm changeset:release
-          version: pnpm changeset:version
-          commit: "chore: new release"
-          title: "chore: new release candidate"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          publish-plan-artifact-id: ${{ needs.select-mode.outputs.publish-plan-artifact-id }}
+
+  # Publishes the packed tarballs to npm and creates GitHub releases.
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Give this environment required reviewers so every publish needs approval.
+    environment: npm-publish
+    permissions:
+      contents: write # create GitHub releases and tags
+      id-token: write # npm trusted publishing
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # No dependency scripts run in the job that holds publish credentials.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Publish to npm
+        uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          pack-dir-artifact-id: ${{ needs.pack.outputs.pack-dir-artifact-id }}

@@ -1,22 +1,23 @@
 {
-  "name": "${{ vars.PROJECT_NAME }}",
+  "name": "dnotes-template",
   "version": "0.0.1",
   "private": true,
-  "description": "${{ vars.PROJECT_DESCRIPTION }}",
+  "description": "Template for pnpm monorepos with CI and Changesets releases",
   "scripts": {
     "changeset": "changeset",
-    "changeset:release": "changeset publish",
-    "changeset:version": "changeset version",
     "build": "pnpm -r build",
     "test:watch": "pnpm -r test:watch",
     "test": "pnpm -r test"
   },
-  "keywords": "${{ vars.PROJECT_KEYWORDS }}",
-  "author": "${{ vars.PROJECT_AUTHOR }}",
+  "keywords": [],
+  "author": "David Hunt",
   "license": "MIT",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=24"
+  },
   "devDependencies": {
-    "pnpm": "^9.15.9",
-    "vitest": "^3.1.4",
-    "@changesets/cli": "^2.29.3"
+    "@changesets/cli": "^3.0.3",
+    "vitest": "^5.0.3"
   }
 }
